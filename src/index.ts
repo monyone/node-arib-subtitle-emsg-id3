@@ -13,8 +13,8 @@ const src = process.stdin;
 const subtitleTransform = new TSSubtitleTransform();
 
 const encoding = ffmpeg(
-  '/usr/bin/ffmpeg', 'mpegts', targetDuration * 1000 - 100, 
-  'libx264', [], 'aac', [], []
+  '/usr/bin/ffmpeg', 'mpegts', targetDuration * 1000, 
+  'libx264', [], 'aac', [], ['-s', '192x108']
 );
 
 src.pipe(subtitleTransform);
@@ -25,5 +25,5 @@ encoding.stdout.pipe(
 ).pipe(
   new MP4FragmentTransform()
 ).pipe(
-  new MP4TSHLSTransform('/usr/bin/ffprobe', basename, targetDuration, subtitleTransform)
+  new MP4TSHLSTransform('/usr/bin/ffprobe', basename, targetDuration + 1, subtitleTransform)
 );

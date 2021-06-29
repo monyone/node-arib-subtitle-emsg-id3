@@ -33,8 +33,14 @@ export default class MP4TSHLSTransform extends Transform {
 
     this.writeM3U8Stream.write("#EXTM3U\n");
     this.writeM3U8Stream.write("#EXT-X-VERSION:7\n");
+    this.writeM3U8Stream.write("#EXT-X-PLAYLIST-TYPE:VOD\n");
     this.writeM3U8Stream.write(`#EXT-X-TARGETDURATION:${targetDuration}\n`);
     this.writeM3U8Stream.write("#EXT-X-MEDIA-SEQUENCE:0\n");
+
+    this.on('finish', () => {
+      this.writeM3U8Stream.write("\n");
+      this.writeM3U8Stream.write("#EXT-X-ENDLIST\n");
+    })
   }
 
   public _transform (fragment: Buffer, encoding: string, callback: TransformCallback): void {

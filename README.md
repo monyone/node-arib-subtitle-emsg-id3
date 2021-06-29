@@ -1,18 +1,14 @@
-# node-mp4-box-transform
+# node-arib-subtitle-emsg-id3
 
-A Simple Top Level Box transform
-
-## Feature
-
-* top level box to node.js transform
+A Simple Emsg insertion example
 
 ## Build
 
 ### Preparing
 
 ```bash
-git clone https://github.com/monyone/node-mp4-box-transform
-cd node-mp4-box-transform
+git clone https://github.com/monyone/node-arib-subtitle-emsg-id3
+cd node-arib-subtitle-emsg-id3
 yarn
 ```
 

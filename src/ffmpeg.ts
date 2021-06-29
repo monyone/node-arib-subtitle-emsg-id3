@@ -21,8 +21,7 @@ export const ffmpeg = (
   ], {
     stdio: ['pipe', 'pipe', 'pipe']
   });
-
-  ffmpeg.on('error', (data) => console.log(data));
+  // ffmpeg.stderr.on('data', (data) => console.log(data.toString('utf-8')));
 
   return ffmpeg
 }

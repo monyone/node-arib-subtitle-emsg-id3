@@ -23,6 +23,7 @@ export default class MP4HLSTransform extends Transform {
 
     this.writeM3U8Stream.write("#EXTM3U\n");
     this.writeM3U8Stream.write("#EXT-X-VERSION:7\n");
+    this.writeM3U8Stream.write("#EXT-X-PLAYLIST-TYPE:VOD\n");
     this.writeM3U8Stream.write(`#EXT-X-TARGETDURATION:${targetDuration}\n`);
     this.writeM3U8Stream.write("#EXT-X-MEDIA-SEQUENCE:0\n");
   }
