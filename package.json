@@ -2,6 +2,9 @@
   "name": "@monyone/arib-subtitle-emsg-id3",
   "version": "0.0.1",
   "main": "dist/index.js",
+  "bin": {
+    "arib-subtitle-emsg-id3": "dist/arib-subtitle-emsg-id3.js"
+  },
   "types": "d.ts/index.d.ts",
   "files": [
     "dist/**/*",
@@ -42,9 +45,9 @@
     "rimraf": "^3.0.2",
     "typescript": "^4.2.3"
   },
-  "private": true,
   "dependencies": {
     "@monyone/mp4-box-transform": "^0.0.2",
-    "arib-mpeg2ts-parser": "^3.0.8"
+    "arib-mpeg2ts-parser": "^3.0.8",
+    "commander": "^8.0.0"
   }
 }

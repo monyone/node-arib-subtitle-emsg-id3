@@ -1,25 +1,24 @@
 import { Writable, Transform, TransformCallback } from 'stream';
 import { createWriteStream } from 'fs';
+import path from 'path';
 
 import { getStats } from './ffprobe';
 
 export default class MP4HLSTransform extends Transform {
   private initializationSegment: Buffer | null = null;
   private bytes: number = 0;
+  private currentTime: number = 0;
 
-  private ffprobe_path: string;
-
-  private basename: string;
+  private basepath: string;
   private writeMP4Stream: Writable;
   private writeM3U8Stream: Writable;
 
-  public constructor(ffprobe_path: string, basename: string, targetDuration: number) {
+  public constructor(basepath: string, targetDuration: number) {
     super();
-    this.ffprobe_path = ffprobe_path;
 
-    this.basename = basename;
-    this.writeMP4Stream = createWriteStream(`${basename}.mp4`);
-    this.writeM3U8Stream = createWriteStream(`${basename}.m3u8`, { encoding: 'utf-8'});
+    this.basepath = path.basename(basepath);
+    this.writeMP4Stream = createWriteStream(`${basepath}.mp4`);
+    this.writeM3U8Stream = createWriteStream(`${basepath}.m3u8`, { encoding: 'utf-8'});
 
     this.writeM3U8Stream.write("#EXTM3U\n");
     this.writeM3U8Stream.write("#EXT-X-VERSION:7\n");
@@ -34,25 +33,34 @@ export default class MP4HLSTransform extends Transform {
 
       this.writeMP4Stream.write(fragment);
 
-      this.writeM3U8Stream.write(`#EXT-X-MAP:URI="${this.basename}.mp4",BYTERANGE="${fragment.length}@${this.bytes}"\n`);
+      this.writeM3U8Stream.write(`#EXT-X-MAP:URI="${this.basepath}.mp4",BYTERANGE="${fragment.length}@${this.bytes}"\n`);
 
       this.bytes += fragment.length;
     } else {
-      const { start_time, duration } = getStats(
-        this.ffprobe_path,
-        Buffer.concat([this.initializationSegment, fragment])
-      );
+      // from hls.js
+      const mdhdIndex = this.initializationSegment.indexOf(Buffer.from('mdhd', 'ascii'));
+      const mdhdVersion = this.initializationSegment[mdhdIndex + 4];
+      const timescale = this.initializationSegment.readUInt32BE(mdhdIndex + (mdhdVersion === 0 ? 16 : 24));
+
+      const tfhdIndex = fragment.indexOf(Buffer.from('tfhd', 'ascii'));
+      const tfhdFlags = fragment.readUInt32BE(tfhdIndex + 4);
+      const defaultSampleDuration = tfhdFlags & 0x000008 && fragment.readUInt32BE(tfhdIndex + 12 + (tfhdFlags & 0x000001 ? 8 : 0) + (tfhdFlags & 0x000002 ? 4 : 0));
+      const trunIndex = fragment.indexOf(Buffer.from('trun', 'ascii'));
+      const sampleCount = fragment.readUInt32BE(trunIndex + 8);
+      const duration = (defaultSampleDuration * sampleCount) / timescale;
+
       const segment = fragment;
 
       this.writeMP4Stream.write(segment);
 
-      const EXTINF = duration - start_time;
+      const EXTINF = duration;
       this.writeM3U8Stream.write(`\n`);
       this.writeM3U8Stream.write(`#EXTINF:${EXTINF}\n`);
       this.writeM3U8Stream.write(`#EXT-X-BYTERANGE:${segment.length}@${this.bytes}\n`);
-      this.writeM3U8Stream.write(`${this.basename}.mp4\n`);
+      this.writeM3U8Stream.write(`${this.basepath}.mp4\n`);
 
       this.bytes += segment.length;
+      this.currentTime += duration;
     }
 
     callback();

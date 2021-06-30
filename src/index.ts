@@ -4,26 +4,46 @@ import MP4TSHLSTransform from './mp4-ts-hls-transform';
 
 import TSSubtitleTransform from './ts-subtitle-transform';
 
+import { PassThrough } from 'stream'
+
 import { ffmpeg } from './ffmpeg'
 
-const basename = 'test';
-const targetDuration = 2;
-const src = process.stdin;
+type Options = {
+  basepath: string,
+  ffmpegPath: string,
+  progress: boolean
+  targetDuration: number,
+  videoCodec?: string,
+  videoOptions?: string[],
+  audioCodec?: string,
+  audioOptions?: string[],
+  otherOptions?: string[],
+}
 
-const subtitleTransform = new TSSubtitleTransform();
+export default (options: Options) => {
+  const src = new PassThrough();
+  const encoding = ffmpeg(
+    options.ffmpegPath, options.progress,
+    'mpegts',
+    options.targetDuration * 1000,
+    options.videoCodec ?? 'copy', options.videoOptions ?? [],
+    options.audioCodec ?? 'copy', options.audioOptions ?? [],
+    options.otherOptions ?? [],
+  );
+  const subtitleTransform = new TSSubtitleTransform();
 
-const encoding = ffmpeg(
-  '/usr/bin/ffmpeg', 'mpegts', targetDuration * 1000, 
-  'libx264', [], 'aac', [], ['-s', '192x108']
-);
+  src.pipe(subtitleTransform);
+  src.pipe(encoding.stdin);
 
-src.pipe(subtitleTransform);
-src.pipe(encoding.stdin);
+  encoding.stdout.pipe(
+    new MP4BoxTransform()
+  ).pipe(
+    new MP4FragmentTransform()
+  ).pipe(
+    new MP4TSHLSTransform(options.basepath, options.targetDuration + 1, subtitleTransform)
+  );
 
-encoding.stdout.pipe(
-  new MP4BoxTransform()
-).pipe(
-  new MP4FragmentTransform()
-).pipe(
-  new MP4TSHLSTransform('/usr/bin/ffprobe', basename, targetDuration + 1, subtitleTransform)
-);
+  return src;
+}
+
+

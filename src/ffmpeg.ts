@@ -2,13 +2,14 @@ import { spawn } from 'child_process';
 import { Readable } from 'stream'
 
 export const ffmpeg = (
-  ffmpeg_path: string, inType: string, durationMsec: number,
+  ffmpeg_path: string, progress: boolean,
+  inType: string, durationMsec: number,
   videoCodec: string, videoOptions: string[],
   audioCodec: string, audioOptions: string[],
   otherOptions: string[]
 ) => {
   const ffmpeg = spawn(ffmpeg_path, [
-    /* '-hide_banner', */
+    '-hide_banner',
     '-f', inType,
     '-i', 'pipe:0',
     '-c:v', videoCodec, ... videoOptions,
@@ -21,7 +22,12 @@ export const ffmpeg = (
   ], {
     stdio: ['pipe', 'pipe', 'pipe']
   });
-  // ffmpeg.stderr.on('data', (data) => console.log(data.toString('utf-8')));
+
+  if (progress) {
+    ffmpeg.stderr.on('data', (data) => console.error(data.toString('utf-8')));
+  } else {
+    ffmpeg.stderr.on('data', () => {});
+  }
 
   return ffmpeg
 }

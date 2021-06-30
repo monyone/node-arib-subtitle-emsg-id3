@@ -18,11 +18,14 @@ export default class TSSubtitleTransform extends Transform {
 
   private PMT_TSSectionQueues = new Map<number, TSSectionQueue>();
   private PMT_SubtitlePids = new Map<number, number>();
+  private PMT_PCRPids = new Map<number, number>();
+  private PMT_PCRs = new Map<number, number>();
 
   private Subtitle_TSPESQueues = new Map<number, TSPESQueue>();
+  private Subtitle_PMTPids = new Map<number, Set<number>>();
 
-  private PCR_PID: number | null = null;
-  private PCR: number | null = null;
+  private PCR_PMTPids = new Map<number, Set<number>>();
+  private PCRPids = new Set<number>();
 
   private queue: PESData[] = [];
 
@@ -35,7 +38,7 @@ export default class TSSubtitleTransform extends Transform {
 
       if (pid == 0x00) {
         this.PAT_TSSectionQueue.push(packet)
-        while (!this.PAT_TSSectionQueue.isEmpty()) { 
+        while (!this.PAT_TSSectionQueue.isEmpty()) {
           const PAT = this.PAT_TSSectionQueue.pop()!;
           if (TSSection.CRC32(PAT) != 0) { continue; }
 
@@ -52,7 +55,7 @@ export default class TSSubtitleTransform extends Transform {
             begin += 4;
           }
         }
-      
+
         // this.push(packet);
       } else if (this.PMT_TSSectionQueues.has(pid)) {
         const PMT_TSSectionQueue = this.PMT_TSSectionQueues.get(pid)!;
@@ -64,7 +67,17 @@ export default class TSSubtitleTransform extends Transform {
 
           const program_info_length = ((PMT[TSSection.EXTENDED_HEADER_SIZE + 2] & 0x0F) << 8) | PMT[TSSection.EXTENDED_HEADER_SIZE + 3];
 
-          this.PCR_PID = ((PMT[TSSection.EXTENDED_HEADER_SIZE + 0] & 0x1F) << 8) | PMT[TSSection.EXTENDED_HEADER_SIZE + 1];
+          const PCR_PID = ((PMT[TSSection.EXTENDED_HEADER_SIZE + 0] & 0x1F) << 8) | PMT[TSSection.EXTENDED_HEADER_SIZE + 1];
+
+          if (!this.PMT_PCRPids.has(pid)) {
+            this.PMT_PCRPids.set(pid, PCR_PID);
+            {
+              const set = this.PCR_PMTPids.get(PCR_PID) ?? new Set<number>();
+              set.add(pid);
+              this.PCR_PMTPids.set(PCR_PID, set);
+            }
+            this.PCRPids.add(PCR_PID);
+          }
 
           let subtitlePid = -1;
 
@@ -95,14 +108,32 @@ export default class TSSubtitleTransform extends Transform {
 
           if (subtitlePid >= 0) {
             if (!this.PMT_SubtitlePids.has(pid)) {
-              this.Subtitle_TSPESQueues.set(subtitlePid, new TSPESQueue());
               this.PMT_SubtitlePids.set(pid, subtitlePid);
+
+              {
+                const set = this.Subtitle_PMTPids.get(subtitlePid) ?? new Set<number>();
+                set.add(pid);
+                this.Subtitle_PMTPids.set(subtitlePid, set);
+              }
+
+              if (!this.Subtitle_TSPESQueues.has(subtitlePid)) {
+                this.Subtitle_TSPESQueues.set(subtitlePid, new TSPESQueue());
+              }
             }
           } else {
             if (this.PMT_SubtitlePids.has(pid)) {
               const oldSubtitlePid = this.PMT_SubtitlePids.get(pid)!;
-              this.Subtitle_TSPESQueues.delete(oldSubtitlePid);
               this.PMT_SubtitlePids.delete(pid);
+
+              {
+                const set = this.Subtitle_PMTPids.get(subtitlePid) ?? new Set<number>();
+                set.delete(pid);                
+                this.Subtitle_PMTPids.set(subtitlePid, set);
+              }
+
+              if (!this.Subtitle_PMTPids.has(subtitlePid) || this.Subtitle_PMTPids.get(subtitlePid)!.size === 0) {
+                this.Subtitle_TSPESQueues.delete(subtitlePid);
+              }
             }
           }
         }
@@ -115,17 +146,12 @@ export default class TSSubtitleTransform extends Transform {
         while (!Subtitle_TSPESQueue.isEmpty()) {
           const SubtitlePES = Subtitle_TSPESQueue.pop()!;
 
-          if (this.PCR == null) { continue; }
-
           let pts = 0;
           pts *= (1 << 3); pts += ((SubtitlePES[TSPES.PES_HEADER_SIZE + 3 + 0] & 0x0E) >> 1);
           pts *= (1 << 8); pts += ((SubtitlePES[TSPES.PES_HEADER_SIZE + 3 + 1] & 0xFF) >> 0);
           pts *= (1 << 7); pts += ((SubtitlePES[TSPES.PES_HEADER_SIZE + 3 + 2] & 0xFE) >> 1);
           pts *= (1 << 8); pts += ((SubtitlePES[TSPES.PES_HEADER_SIZE + 3 + 3] & 0xFF) >> 0);
           pts *= (1 << 7); pts += ((SubtitlePES[TSPES.PES_HEADER_SIZE + 3 + 4] & 0xFE) >> 1);
-
-          pts -= this.PCR;
-          if (pts < 0) { pts += 2 ** 33; }
 
           const PES_header_data_length = SubtitlePES[TSPES.PES_HEADER_SIZE + 2];
           const PES_data_packet_header_length = (SubtitlePES[(TSPES.PES_HEADER_SIZE + 3) + PES_header_data_length + 2] & 0x0F);
@@ -138,14 +164,23 @@ export default class TSSubtitleTransform extends Transform {
 
           const subtitleData = SubtitlePES.slice(TSPES.PES_HEADER_SIZE + (3 + PES_header_data_length));
 
-          this.queue.push({ pts: pts, pes: subtitleData });
+          for (const PMT_PID of Array.from(this.Subtitle_PMTPids.get(pid) ?? [])) {
+            if (!this.PMT_PCRs.has(PMT_PID)) { continue; }
+            const PCR = this.PMT_PCRs.get(PMT_PID)!;
+
+            let modified_pts = pts - PCR;
+            if (modified_pts < 0) { modified_pts += 2 ** 33; }
+
+            this.queue.push({ pts: modified_pts, pes: subtitleData });
+          }
         }
         // this.push(packet);
-      } else if (this.PCR_PID === pid) {
-        if (this.PCR == null && TSPacket.has_pcr(packet)) {
-          this.PCR = TSPacket.pcr(packet);
+      } else if(this.PCRPids.has(pid)) {
+        for (const PMT_PID of Array.from(this.PCR_PMTPids.get(pid) ?? [])) {
+          if (!this.PMT_PCRs.has(PMT_PID) && TSPacket.has_pcr(packet)) {
+            this.PMT_PCRs.set(PMT_PID, TSPacket.pcr(packet));
+          }
         }
-        // this.push(packet);        
       } else {
         // this.push(packet);
       }
@@ -157,7 +192,7 @@ export default class TSSubtitleTransform extends Transform {
     callback();
   }
 
-  public peek(): PESData | undefined { 
+  public peek(): PESData | undefined {
     return this.queue.length > 0 ? this.queue[0] : undefined;
   }
 

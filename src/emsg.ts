@@ -11,11 +11,11 @@ export const emsgV1WithID3 = (
   header.writeUInt32BE(timescale, 0); // timescale
   header.writeBigInt64BE(presentation_time, 4); // presentation_time
   header.writeUInt32BE(0xFFFFFFFF, 12); // duration
-  header.writeUInt32BE(0, 14); // id
+  header.writeUInt32BE(0, 16); // id
 
   const scheme_id_uri = Buffer.from('https://aomedia.org/emsg/ID3\0');
   const value = Buffer.from('\0');
-  
+
   const payload = Buffer.concat([
     type,
     version,
@@ -25,7 +25,7 @@ export const emsgV1WithID3 = (
     value,
     id3
   ])
-  
+
   const size = Buffer.alloc(4);
   size.writeUInt32BE(payload.length + 4, 0);
   return Buffer.concat([
