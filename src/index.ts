@@ -13,11 +13,12 @@ type Options = {
   ffmpegPath: string,
   progress: boolean
   targetDuration: number,
+  preOptions?: string[],
   videoCodec?: string,
   videoOptions?: string[],
   audioCodec?: string,
   audioOptions?: string[],
-  otherOptions?: string[],
+  postOptions?: string[],
 }
 
 export default (options: Options) => {
@@ -26,9 +27,10 @@ export default (options: Options) => {
     options.ffmpegPath, options.progress,
     'mpegts',
     options.targetDuration * 1000,
+    options.preOptions ?? [],
     options.videoCodec ?? 'copy', options.videoOptions ?? [],
     options.audioCodec ?? 'copy', options.audioOptions ?? [],
-    options.otherOptions ?? [],
+    options.postOptions ?? [],
   );
   const subtitleTransform = new TSSubtitleTransform();
 
