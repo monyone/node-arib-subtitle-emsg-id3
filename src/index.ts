@@ -19,6 +19,7 @@ type Options = {
   audioCodec?: string,
   audioOptions?: string[],
   postOptions?: string[],
+  emsgDuration?: number,
 }
 
 export default (options: Options) => {
@@ -42,7 +43,7 @@ export default (options: Options) => {
   ).pipe(
     new MP4FragmentTransform()
   ).pipe(
-    new MP4TSHLSTransform(options.basepath, options.targetDuration + 1, subtitleTransform)
+    new MP4TSHLSTransform(options.basepath, options.targetDuration + 1, subtitleTransform, options.emsgDuration)
   );
 
   return src;

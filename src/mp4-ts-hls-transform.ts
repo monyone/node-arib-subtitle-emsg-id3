@@ -13,15 +13,17 @@ export default class MP4TSHLSTransform extends Transform {
   private currentTime: number = 0;
 
   private subtitle: TSSubtitleTransform;
+  private emsgDuration: number | undefined;
 
   private basename: string;
   private writeMP4Stream: Writable;
   private writeM3U8Stream: Writable;
 
-  public constructor(basepath: string, targetDuration: number, subtitle: TSSubtitleTransform) {
+  public constructor(basepath: string, targetDuration: number, subtitle: TSSubtitleTransform, emsgDuration?: number) {
     super();
 
     this.subtitle = subtitle;
+    this.emsgDuration = emsgDuration;
 
     this.basename = path.basename(basepath);
     this.writeMP4Stream = createWriteStream(`${basepath}.mp4`);
@@ -69,7 +71,12 @@ export default class MP4TSHLSTransform extends Transform {
         if (second < this.currentTime + duration) {
           this.subtitle.pop();
 
-          const emsg = emsgV1WithID3(90000, BigInt(data.pts), ID3v2PRIV('aribb24.js', data.pes))
+          const timescale = 90000;
+          const emsg = emsgV1WithID3(
+            timescale, BigInt(data.pts),
+            this.emsgDuration != null ? this.emsgDuration * timescale : 0xFFFFFFFF /* undifinite */,
+            ID3v2PRIV('aribb24.js', data.pes)
+          );
           emsgs.push(emsg);
         } else {
           break;

@@ -1,6 +1,7 @@
 export const emsgV1WithID3 = (
   timescale: number,
   presentation_time: bigint,
+  duration: number | null | undefined,
   id3: Buffer
 ) => {
   const type = Buffer.from('emsg', 'ascii');
@@ -10,7 +11,7 @@ export const emsgV1WithID3 = (
   const header = Buffer.alloc(4 + 8 + 4 + 4);
   header.writeUInt32BE(timescale, 0); // timescale
   header.writeBigInt64BE(presentation_time, 4); // presentation_time
-  header.writeUInt32BE(0xFFFFFFFF, 12); // duration
+  header.writeUInt32BE(duration ?? 0xFFFFFFFF, 12); // duration
   header.writeUInt32BE(0, 16); // id
 
   const scheme_id_uri = Buffer.from('https://aomedia.org/emsg/ID3\0');
